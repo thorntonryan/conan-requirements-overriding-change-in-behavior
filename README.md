@@ -12,8 +12,8 @@ $ conan create shared_com_lib.py 1.0.1@user/testing
 $ conan create shared_com_lib.py 1.0.2@user/testing
 # Create SharedGuiLib 0.1
 $ conan create shared_gui_lib.py user/testing
-# Create MyApp 0.1
-$ conan info myapp.py user/testing
+# Resolve requirements for MyApp 0.1
+$ conan info myapp.py
 ```
 2. And receive the following error:
 ```
@@ -32,8 +32,8 @@ $ conan create shared_com_lib.py 1.0.1@user/testing
 $ conan create shared_com_lib.py 1.0.2@user/testing
 # Create SharedGuiLib 0.1
 $ conan create shared_gui_lib.py user/testing
-# Create MyApp 0.1
-$ conan info myapp.py user/testing
+# Resolve requirements for MyApp 0.1
+$ conan info myapp.py
 ```
 2. The requirement provided by the build requirement is overridden as expected:
 ```
