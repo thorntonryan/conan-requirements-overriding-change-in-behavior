@@ -1,90 +1,122 @@
 ### Expected Behavior ( I think )
 
-I expect MyApp's _semver compatible_ requirements to override additional requirements coming from its build requirements.
+I would expect Conan's "private" requirements to participate in transitive requirement resolution in order to avoid violations of the [One Definition Rule].
 
-### Current Behavior (1.13+)
+### Current Behavior (1.14.4)
 
 1. Run the following:
 ```sh
-# Create SharedCOMLib 1.0.1
-$ conan create shared_com_lib.py 1.0.1@user/testing
-# Create SharedCOMLib 1.0.2
-$ conan create shared_com_lib.py 1.0.2@user/testing
-# Create SharedGuiLib 0.1
-$ conan create shared_gui_lib.py user/testing
-# Resolve requirements for MyApp 0.1
-$ conan info myapp.py
+# install conan 1.14.4 in venv and build examples
+$ ./conan-1.14.4/Scripts/python build.py
 ```
 2. And receive the following error:
 ```
-ERROR: Conflict in SharedGuiLib/0.1@user/testing
-    Requirement SharedCOMLib/1.0.1@user/testing conflicts with already defined SharedCOMLib/1.0.2@user/testing
-    To change it, override it in your base requirements
+MyBoostClone/1.67.0@user/testing
+    ID: 55fff3b995daa8cc67f1adbb986bef56b7284edd
+    BuildID: None
+    Remote: None
+    Recipe: Cache
+    Binary: Skip
+    Binary remote: None
+    Creation date: 2019-04-23 16:59:00
+    Required by:
+        SharedStaticLib/0.1@user/testing
+MyBoostClone/1.70.0@user/testing
+    ID: 55fff3b995daa8cc67f1adbb986bef56b7284edd
+    BuildID: None
+    Remote: None
+    Recipe: Cache
+    Binary: Cache
+    Binary remote: None
+    Creation date: 2019-04-23 16:59:02
+    Required by:
+        myapp.py (MyApp/0.1@None/None)
+MyZlibClone/1.2.8@user/testing
+    ID: 479e5c321685f6e20cbbf93c38ae334c54ade580
+    BuildID: None
+    Remote: None
+    Recipe: Cache
+    Binary: Skip
+    Binary remote: None
+    Creation date: 2019-04-23 16:58:57
+    Required by:
+        SharedStaticLib/0.1@user/testing
+MyZlibClone/1.2.11@user/testing
+    ID: 479e5c321685f6e20cbbf93c38ae334c54ade580
+    BuildID: None
+    Remote: None
+    Recipe: Cache
+    Binary: Cache
+    Binary remote: None
+    Creation date: 2019-04-23 16:58:59
+    Required by:
+        myapp.py (MyApp/0.1@None/None)
+SharedStaticLib/0.1@user/testing
+    ID: 120398e629c94b86476bf86eea4690f10dacfc1a
+    BuildID: None
+    Remote: None
+    Recipe: Cache
+    Binary: Cache
+    Binary remote: None
+    Creation date: 2019-04-23 16:59:04
+    Required by:
+        myapp.py (MyApp/0.1@None/None)
+    Requires:
+        MyZlibClone/1.2.8@user/testing
+        MyBoostClone/1.67.0@user/testing
+myapp.py (MyApp/0.1@None/None)
+    ID: 2036575750b15d9f9e530734a22e3980aae91a98
+    BuildID: None
+    Requires:
+        MyBoostClone/1.70.0@user/testing
+        MyZlibClone/1.2.11@user/testing
+        SharedStaticLib/0.1@user/testing
 ```
 
-### Old Behavior (1.12.3)
+3. Note that MyApp contains two different versions of the same header only library (`MyBoostClone/1.70.0` and `MyBoostClone/1.67.0`)
+  and also two different versions of the same static library (`MyZlibClone/1.2.11` and `MyZlibClone/1.2.8`),
+  which I believe may result in violations of the [One Definition Rule].
 
-1. Run the following:
-```sh
-# Create SharedCOMLib 1.0.1
-$ conan create shared_com_lib.py 1.0.1@user/testing
-# Create SharedCOMLib 1.0.2
-$ conan create shared_com_lib.py 1.0.2@user/testing
-# Create SharedGuiLib 0.1
-$ conan create shared_gui_lib.py user/testing
-# Resolve requirements for MyApp 0.1
-$ conan info myapp.py
-```
-2. The requirement provided by the build requirement is overridden as expected:
-```
-$ ./conan-1.12.3/Scripts/conan info myapp.py
-SharedGuiLib/0.1@user/testing requirement SharedCOMLib/1.0.1@user/testing overridden by your conanfile to SharedCOMLib/1.0.2@user/testing
-```
+4. I would expect the following:
+    * Conan to override `MyZlibClone/1.2.8`, because `MyZlibClone/1.2.11` is semver compatible and use only one version of `MyZlibClone`
+    * Conan to reject the use of `SharedStaticLib/0.1`, because it is `full_version_mode` incompatible with MyApp's requirement of `MyBoostClone/1.70.0`. 
 
 ### Context
 
-I have three Conan packages in play:
+This example attempts to illustrate a real world package my team maintains.
 
-1. MyApp
-_The primary Qt Desktop application that I'm trying to build. Not an actual package per se, but it uses Conan to describe its build dependencies._
-2. SharedCOMLib
-_Multiple COM ([Component Object Model](https://docs.microsoft.com/en-us/windows/desktop/com/component-object-model--com--portal)) dlls implementing various things. Used at runtime by "MyApp"_
-3. SharedGuiLib
-_Static Qt GUI library offering convenient Widgets / wrappers / utilities, including some that take advantage of classes found in "SharedCOMLib". Used by "MyApp" to avoid re-inventing the wheel on common widgets/dialogs/etc. shared between a variety of tools._
+SharedStaticLib represents a collection of helpful utilities used by a variety
+of tools. SharedStaticLib is careful to minimize its public API footprint and keeps
+any heavy weight dependencies out of its public headers / API.
 
-With the following package versions:
+Use of libraries like Boost or zlib are seen as "implementation details" of the SharedStaticLib
+and otherwise hidden from consuming apps.
 
-#### SharedCOMLib
-* Version 1.0.1
-* Version 1.0.2
+Other tools, like MyApp, consume SharedStaticLib and may also have some of these same
+dependencies (e.g. Boost or zlib) for their own reasons.
 
-#### SharedGuiLib
-* Version 0.1
-* Requires `SharedCOMLib/1.0.1`
+This example shows that using "private" requirements in a shared library
+may result in violations of the [One Definition Rule] (ODR).
 
-#### MyApp
-* Version 0.1
-* Requires `SharedCOMLib/1.0.2`
-* Build Requires `SharedGuiLib/0.1`
+The easiest one to see is Boost, where this example shows 
+that both Boost 1.70.0 and Boost 1.67.0 can end up in the same binary.
 
-A build requirement of MyApp (i.e. "SharedCOMLib") has outdated requirements on another shared library (i.e. "SharedCOMLib"). MyApp also has a requirement on the same shared library (i.e. "SharedCOMLib"), albeit with a more up to date version.
+Conan is not honoring the full_version_mode requirement of Boost by the SharedStaticLib.
 
-Up until Conan 1.13, that has been okay, because Conan overrode the older version of "SharedCOMLib" coming from my MyApp's build requirements with the newer version coming from MyApp's requirements.
+Likewise, with zlib, the consuming app has selected a higher, semver compatible
+version of zlib, but Conan is not factoring this into its decision to use 
+the cached SharedStaticLib, which has an older version embedded inside it,
+which would similarly result in ODR violations because the static lib
+is using 1.2.8 and the consuming app 1.2.11 yet both are found in the consuming app.
 
-I can apply the fix outlined above in https://github.com/conan-io/conan/issues/4753#issuecomment-477611606, and do something like:
-
-```diff
-- requires = ("SharedCOMLib/1.0.2@user/testing",)
-+def requirements(self):
-+        self.requires('SharedCOMLib/1.0.2@user/testing', override=True)
-```
-
-But I'm not certain whether the above change is necessary in a 1.13+ world or whether my example illustrates a regression.
-
-As always, thanks to you and all the other maintainers for all your hard work and support maintaining Conan!
+Similarly, if the consuming app used a higher semver incompatible version of zlib,
+like 2.0.0, I would expect Conan to reject the use of `SharedStaticLib/0.1` as incompatible.
 
 
 ### References
 
 * https://github.com/conan-io/conan/issues/4753
 * https://github.com/conan-io/conan/issues/4931
+* https://github.com/conan-io/conan/pull/4987
+
+[One Definition Rule]: https://en.wikipedia.org/wiki/One_Definition_Rule

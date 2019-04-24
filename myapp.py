@@ -5,4 +5,8 @@ class MyAppConan(ConanFile):
     version = "0.1"
     settings = "os", "compiler", "build_type", "arch"
 
-    requires = ("SharedCOMLib/1.0.2@user/testing", "SharedGuiLib/0.1@user/testing")
+    requires = (
+            "MyBoostClone/1.70.0@user/testing",
+            "MyZlibClone/1.2.11@user/testing",
+            "SharedStaticLib/0.1@user/testing",
+    )
