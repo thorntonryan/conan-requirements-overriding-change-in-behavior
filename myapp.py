@@ -5,5 +5,4 @@ class MyAppConan(ConanFile):
     version = "0.1"
     settings = "os", "compiler", "build_type", "arch"
 
-    requires = ("SharedCOMLib/1.0.2@user/testing",)
-    build_requires = requires + ("SharedGuiLib/0.1@user/testing",)
+    requires = ("SharedCOMLib/1.0.2@user/testing", "SharedGuiLib/0.1@user/testing")
